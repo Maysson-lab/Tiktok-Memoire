@@ -114,6 +114,7 @@ export default function App() {
           <form onSubmit={handleSubmit} className="relative group">
             {inputMode === 'url' ? (
               <input
+                key="url-input"
                 type="url"
                 className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-6 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#fe2c55]/50 transition-colors shadow-2xl pr-36"
                 placeholder="Paste TikTok URL here..."
@@ -124,6 +125,7 @@ export default function App() {
               />
             ) : (
               <input
+                key="file-input"
                 type="file"
                 accept="video/mp4,video/*"
                 className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3 px-4 text-slate-200 focus:outline-none focus:border-[#fe2c55]/50 transition-colors shadow-2xl file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#fe2c55]/10 file:text-[#fe2c55] hover:file:bg-[#fe2c55]/20 pr-36"
@@ -184,7 +186,7 @@ export default function App() {
                 </div>
                 <div className="space-y-4 flex-grow overflow-y-auto custom-scrollbar pr-2 h-0">
                    <div className="prose prose-invert prose-sm text-slate-400 leading-relaxed">
-                     {data.summary.split('\n').filter(l => l.trim()).map((line, i) => {
+                     {(typeof data.summary === 'string' ? data.summary : String(data.summary)).split('\n').filter(l => l.trim()).map((line, i) => {
                        const isBullet = line.trim().startsWith('-') || line.trim().startsWith('*');
                        const cleanLine = isBullet ? line.trim().substring(1).trim() : line;
                        return (

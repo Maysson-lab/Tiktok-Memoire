@@ -86,13 +86,15 @@ async function startServer() {
 
       console.log(`[3.5/4] Waiting for AI file to become active...`);
       let fileState = await ai.files.get({ name: aiFile.name });
-      while (fileState.state === "PROCESSING") {
+      let attempts = 0;
+      while (fileState.state !== "ACTIVE" && fileState.state !== "FAILED" && attempts < 30) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         fileState = await ai.files.get({ name: aiFile.name });
+        attempts++;
       }
 
-      if (fileState.state === "FAILED") {
-        throw new Error("Video processing failed by Gemini.");
+      if (fileState.state === "FAILED" || fileState.state !== "ACTIVE") {
+        throw new Error("Video processing failed by Gemini or took too long to become active.");
       }
 
       // Simple prompt acting as the brain
@@ -148,19 +150,26 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
       }
 
       // Step 4: Save to DB (Supabase)
+      let finalTranscription = typeof aiResult.transcription === 'string' ? aiResult.transcription : 
+                               Array.isArray(aiResult.transcription) ? aiResult.transcription.join('\n') :
+                               JSON.stringify(aiResult.transcription) || 'No transcription available';
+      let finalSummary = typeof aiResult.summary === 'string' ? aiResult.summary : 
+                         Array.isArray(aiResult.summary) ? aiResult.summary.join('\n') :
+                         JSON.stringify(aiResult.summary) || 'No summary available';
+
       const entry = {
         tiktok_url: bucketUrl || url || "local_upload",
         video_id: videoId,
         author: videoData.author?.nickname || 'Unknown',
         title: videoData.title || '',
-        transcription: aiResult.transcription || 'No transcription available',
-        summary: aiResult.summary || 'No summary available',
+        transcription: finalTranscription,
+        summary: finalSummary,
         created_at: new Date().toISOString()
       };
 
       if (supabase) {
         const { error } = await supabase.from('tiktok_summaries').insert([entry]);
-        if (error) console.error("Supabase insert error:", error);
+        if (error) console.error("Supabase insert error:", JSON.stringify(error, null, 2));
       } else {
         console.warn("Supabase not configured, skipping DB insert.");
       }
