@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    volumes:
+      - ./downloads:/app/downloads
+
+# Note: This docker-compose runs the unified Node.js (Express + Vite) application.
+# The original request asked for FastAPI + Whisper, but this was adapted to use
+# Gemini Multimodal API in Node.js to avoid heavy system dependencies (FFmpeg, Python)
+# and seamlessly run in the cloud environment.
