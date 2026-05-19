@@ -70,7 +70,10 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: [file, prompt],
+        contents: [
+          { fileData: { fileUri: file.uri, mimeType: file.mimeType } },
+          prompt
+        ],
         config: {
           responseMimeType: "application/json",
         }
