@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
-import os from "os";
+import multer from "multer";
 
 // Initialize external clients
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -14,6 +14,10 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
+const downloadsDir = path.join(process.cwd(), "downloads");
+if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir);
+const upload = multer({ dest: downloadsDir });
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -21,43 +25,61 @@ async function startServer() {
   app.use(express.json());
 
   // API Route
-  app.post("/api/summarize", async (req, res) => {
+  app.post("/api/summarize", upload.single("file"), async (req, res) => {
     try {
       const { url } = req.body;
-      if (!url || !url.includes("tiktok.com")) {
-        return res.status(400).json({ error: "Invalid TikTok URL provided." });
+      const file = req.file;
+
+      if (!url && !file) {
+        return res.status(400).json({ error: "Please provide a valid TikTok URL or upload an MP4 file." });
       }
 
-      console.log(`[1/4] Fetching metadata for ${url} via TikWM...`);
-      // Step 1: Fetch TikTok data (Mocking the yt-dlp part)
-      const tikwmUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
-      const metaRes = await fetch(tikwmUrl);
-      const metaJson: any = await metaRes.json();
-      
-      if (!metaJson || metaJson.code !== 0 || !metaJson.data) {
-        throw new Error("Could not extract TikTok data");
+      let filePath = "";
+      let videoId = "";
+      let videoData: any = {};
+      let isFile = !!file;
+
+      if (isFile) {
+        console.log(`[1/4] Processing uploaded file...`);
+        filePath = file!.path;
+        videoId = file!.filename;
+        videoData = {
+          author: { nickname: 'Local Upload' },
+          title: file!.originalname,
+          id: videoId
+        };
+      } else {
+        if (!url || !url.includes("tiktok.com")) {
+          return res.status(400).json({ error: "Invalid TikTok URL provided." });
+        }
+
+        console.log(`[1/4] Fetching metadata for ${url} via TikWM...`);
+        // Step 1: Fetch TikTok data (Mocking the yt-dlp part)
+        const tikwmUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
+        const metaRes = await fetch(tikwmUrl);
+        const metaJson: any = await metaRes.json();
+        
+        if (!metaJson || metaJson.code !== 0 || !metaJson.data) {
+          throw new Error("Could not extract TikTok data");
+        }
+
+        videoData = metaJson.data;
+        const videoPlayUrl = videoData.play;
+        videoId = videoData.id;
+
+        console.log(`[2/4] Downloading video ${videoId}...`);
+        // Step 2: Download video
+        const downloadRes = await fetch(videoPlayUrl);
+        const buffer = await downloadRes.arrayBuffer();
+        
+        filePath = path.join(downloadsDir, `${videoId}.mp4`);
+        fs.writeFileSync(filePath, Buffer.from(buffer));
       }
-
-      const videoData = metaJson.data;
-      const videoPlayUrl = videoData.play;
-      const videoId = videoData.id;
-
-      console.log(`[2/4] Downloading video ${videoId}...`);
-      // Step 2: Download video (Alternative to ffmpeg/yt-dlp)
-      const downloadRes = await fetch(videoPlayUrl);
-      const buffer = await downloadRes.arrayBuffer();
-      
-      // Save locally to a temp folder, imitating backend/downloads/
-      const downloadsDir = path.join(process.cwd(), "downloads");
-      if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir);
-      
-      const filePath = path.join(downloadsDir, `${videoId}.mp4`);
-      fs.writeFileSync(filePath, Buffer.from(buffer));
 
       console.log(`[3/4] Transcribing and Summarizing via AI...`);
       // Step 3: Transcription + AI Summary (Replacing Whisper + OpenRouter with Gemini Multimodal for simplicity in Node)
       // Upload media to Gemini File API
-      const file = await ai.files.upload({
+      const aiFile = await ai.files.upload({
          file: filePath,
          config: { mimeType: "video/mp4" },
       });
@@ -71,7 +93,7 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [
-          { fileData: { fileUri: file.uri, mimeType: file.mimeType } },
+          { fileData: { fileUri: aiFile.uri, mimeType: aiFile.mimeType } },
           prompt
         ],
         config: {
@@ -88,10 +110,35 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
          aiResult = { transcription: response.text, summary: response.text };
       }
 
-      console.log(`[4/4] Saving to Database...`);
+      console.log(`[4/4] Saving to Database & Bucket...`);
+      
+      let bucketUrl = isFile ? "" : url;
+      if (supabase) {
+        try {
+          const fileBuffer = fs.readFileSync(filePath);
+          const finalFilename = `${videoId}.mp4`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("videos")
+            .upload(finalFilename, fileBuffer, {
+              contentType: 'video/mp4',
+              upsert: true
+            });
+            
+          if (!uploadError && uploadData) {
+            const { data: publicUrlData } = supabase.storage.from("videos").getPublicUrl(finalFilename);
+            bucketUrl = publicUrlData.publicUrl;
+            console.log("Uploaded to Supabase bucket:", bucketUrl);
+          } else {
+             console.log("Bucket upload warning (did you create the 'videos' bucket?):", uploadError?.message);
+          }
+        } catch (err) {
+          console.error("Bucket upload err:", err);
+        }
+      }
+
       // Step 4: Save to DB (Supabase)
       const entry = {
-        tiktok_url: url,
+        tiktok_url: bucketUrl || url || "local_upload",
         video_id: videoId,
         author: videoData.author?.nickname || 'Unknown',
         title: videoData.title || '',
@@ -107,7 +154,7 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
         console.warn("Supabase not configured, skipping DB insert.");
       }
 
-      // Cleanup
+      // Cleanup locally
       try { fs.unlinkSync(filePath); } catch (e) {}
 
       res.json({ success: true, data: entry });

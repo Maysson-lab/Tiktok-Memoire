@@ -17,16 +17,23 @@ interface SummaryData {
 
 export default function App() {
   const [url, setUrl] = useState('');
+  const [inputMode, setInputMode] = useState<'url' | 'file'>('url');
+  const [file, setFile] = useState<File | null>(null);
+
   const [status, setStatus] = useState<SummaryStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [data, setData] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<SummaryData[]>([]);
-  const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || !url.includes('tiktok.com')) {
+    if (inputMode === 'url' && (!url.trim() || !url.includes('tiktok.com'))) {
       setErrorMsg('Please enter a valid TikTok URL');
+      setStatus('error');
+      return;
+    }
+    if (inputMode === 'file' && !file) {
+      setErrorMsg('Please select a video file');
       setStatus('error');
       return;
     }
@@ -36,12 +43,16 @@ export default function App() {
     setData(null);
 
     try {
+      const formData = new FormData();
+      if (inputMode === 'url') {
+        formData.append('url', url);
+      } else if (file) {
+        formData.append('file', file);
+      }
+
       const response = await fetch('/api/summarize', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
+        body: formData,
       });
 
       const result = await response.json();
@@ -53,7 +64,8 @@ export default function App() {
       setData(result.data);
       setHistory((prev) => [result.data, ...prev]);
       setStatus('success');
-      setUrl('');
+      if (inputMode === 'url') setUrl('');
+      else setFile(null);
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred');
       setStatus('error');
@@ -83,27 +95,56 @@ export default function App() {
       </nav>
 
       <main className="max-w-6xl mx-auto w-full flex-grow flex flex-col">
-        <form onSubmit={handleSubmit} className="relative mb-6 group">
-          <input
-            type="url"
-            className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-6 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#fe2c55]/50 transition-colors shadow-2xl pr-36"
-            placeholder="Paste TikTok URL here..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            disabled={status === 'fetching'}
-            required
-          />
-          <button
-            type="submit"
-            disabled={status === 'fetching'}
-            className="absolute right-2 top-2 bottom-2 px-4 sm:px-6 bg-[#fe2c55] text-white font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2 text-sm sm:text-base"
-          >
-            {status === 'fetching' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : null}
-            {status === 'fetching' ? 'Processing' : 'Summarize'}
-          </button>
-        </form>
+        <div className="mb-6 space-y-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setInputMode('url'); setStatus('idle'); setErrorMsg(''); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${inputMode === 'url' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              URL Link
+            </button>
+            <button
+              onClick={() => { setInputMode('file'); setStatus('idle'); setErrorMsg(''); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${inputMode === 'file' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Upload MP4
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="relative group">
+            {inputMode === 'url' ? (
+              <input
+                type="url"
+                className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 px-6 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#fe2c55]/50 transition-colors shadow-2xl pr-36"
+                placeholder="Paste TikTok URL here..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                disabled={status === 'fetching'}
+                required
+              />
+            ) : (
+              <input
+                type="file"
+                accept="video/mp4,video/*"
+                className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3 px-4 text-slate-200 focus:outline-none focus:border-[#fe2c55]/50 transition-colors shadow-2xl file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#fe2c55]/10 file:text-[#fe2c55] hover:file:bg-[#fe2c55]/20 pr-36"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                disabled={status === 'fetching'}
+                required
+              />
+            )}
+            
+            <button
+              type="submit"
+              disabled={status === 'fetching'}
+              className="absolute right-2 top-2 bottom-2 px-4 sm:px-6 bg-[#fe2c55] text-white font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2 text-sm sm:text-base"
+            >
+              {status === 'fetching' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : null}
+              {status === 'fetching' ? 'Processing' : 'Summarize'}
+            </button>
+          </form>
+        </div>
 
         {status === 'error' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 mb-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-200">
