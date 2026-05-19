@@ -169,7 +169,10 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
 
       if (supabase) {
         const { error } = await supabase.from('tiktok_summaries').insert([entry]);
-        if (error) console.error("Supabase insert error:", JSON.stringify(error, null, 2));
+        if (error) {
+           console.error("Supabase insert error:", error.message || JSON.stringify(error));
+           return res.status(500).json({ error: `Database error: ${error.message}` });
+        }
       } else {
         console.warn("Supabase not configured, skipping DB insert.");
       }
