@@ -84,6 +84,17 @@ async function startServer() {
          config: { mimeType: "video/mp4" },
       });
 
+      console.log(`[3.5/4] Waiting for AI file to become active...`);
+      let fileState = await ai.files.get({ name: aiFile.name });
+      while (fileState.state === "PROCESSING") {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        fileState = await ai.files.get({ name: aiFile.name });
+      }
+
+      if (fileState.state === "FAILED") {
+        throw new Error("Video processing failed by Gemini.");
+      }
+
       // Simple prompt acting as the brain
       const prompt = `You are a "Second Brain" assistant for short videos. 
 1. Transcribe the audio from this video as accurately as possible.
