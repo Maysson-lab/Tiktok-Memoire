@@ -101,7 +101,14 @@ async function startServer() {
       const prompt = `You are a "Second Brain" assistant for short videos. 
 1. Transcribe the audio from this video as accurately as possible.
 2. Provide a concise bulleted summary of the core concepts, takeaways, or events.
-Format your response as a JSON object with 'transcription' and 'summary' keys. Only return the JSON.`;
+3. Generate 3 to 5 relevant tags/keywords (e.g., "Productivity", "Web Development", "Recipe").
+Format your response as a JSON object exactly like this:
+{
+  "transcription": "...",
+  "summary": "...",
+  "tags": ["tag1", "tag2", "tag3"]
+}
+Only return the JSON without markdown code blocks.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -157,21 +164,44 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
                          Array.isArray(aiResult.summary) ? aiResult.summary.join('\n') :
                          JSON.stringify(aiResult.summary) || 'No summary available';
 
-      const entry = {
+      const tags = Array.isArray(aiResult.tags) ? aiResult.tags : [];
+      let entry: any = {
         tiktok_url: bucketUrl || url || "local_upload",
         video_id: videoId,
         author: videoData.author?.nickname || 'Unknown',
         title: videoData.title || '',
         transcription: finalTranscription,
         summary: finalSummary,
+        tags: tags,
+        is_favorite: false,
+        notes: '',
         created_at: new Date().toISOString()
       };
 
       if (supabase) {
-        const { error } = await supabase.from('tiktok_summaries').insert([entry]);
+        // Try to insert with new columns
+        const { error, data: insertedData } = await supabase.from('tiktok_summaries').insert([entry]).select().single();
         if (error) {
-           console.error("Supabase insert error:", error.message || JSON.stringify(error));
-           return res.status(500).json({ error: `Database error: ${error.message}` });
+           if (error.code === '42703') { // Column does not exist
+             console.warn("New columns not found, using legacy schema.");
+             const fallbackEntry = { ...entry };
+             delete fallbackEntry.tags;
+             delete fallbackEntry.is_favorite;
+             delete fallbackEntry.notes;
+             
+             const { error: fallbackError, data: fallbackData } = await supabase.from('tiktok_summaries').insert([fallbackEntry]).select().single();
+             if (fallbackError) {
+                console.error("Supabase insert error:", fallbackError);
+                return res.status(500).json({ error: `Database error: ${fallbackError.message}` });
+             } else {
+                entry = fallbackData;
+             }
+           } else {
+             console.error("Supabase insert error:", error.message || JSON.stringify(error));
+             return res.status(500).json({ error: `Database error: ${error.message}` });
+           }
+        } else {
+           entry = insertedData;
         }
       } else {
         console.warn("Supabase not configured, skipping DB insert.");
@@ -186,6 +216,29 @@ Format your response as a JSON object with 'transcription' and 'summary' keys. O
       console.error("Error processing video:", error);
       res.status(500).json({ error: error.message || "An unexpected error occurred" });
     }
+  });
+
+  app.get("/api/history", async (req, res) => {
+    if (!supabase) return res.json({ history: [] });
+    const { data, error } = await supabase.from('tiktok_summaries').select('*').order('created_at', { ascending: false });
+    if (error) {
+       console.error("Supabase fetch error:", error);
+       return res.status(500).json({ error: error.message });
+    }
+    res.json({ history: data || [] });
+  });
+
+  app.patch("/api/videos/:id", async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+    const { id } = req.params;
+    const updates = req.body; // e.g. { tags, notes, is_favorite, transcription }
+
+    const { data, error } = await supabase.from('tiktok_summaries').update(updates).eq('id', id).select().single();
+    if (error) {
+       console.error("Supabase update error:", error);
+       return res.status(500).json({ error: error.message });
+    }
+    res.json({ success: true, data });
   });
 
   // Vite middleware for development

@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
-import { Sparkles, BrainCircuit, Link as LinkIcon, Loader2, Database, AlertCircle, CheckCircle2, History, Video, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, BrainCircuit, Link as LinkIcon, Loader2, Database, AlertCircle, CheckCircle2, History, Video, Clock, Search, Star, Edit3, Save, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 
 type SummaryStatus = 'idle' | 'fetching' | 'success' | 'error';
 
 interface SummaryData {
+  id?: string;
   tiktok_url: string;
   video_id: string;
   author: string;
   title: string;
   transcription: string;
   summary: string;
+  tags?: string[];
+  is_favorite?: boolean;
+  notes?: string;
   created_at: string;
 }
 
@@ -24,6 +28,77 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [data, setData] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<SummaryData[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Editing state for transcription/notes
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/history');
+      const json = await res.json();
+      if (json.history) {
+        setHistory(json.history);
+      }
+    } catch (err) {
+      console.error("Failed to fetch history", err);
+    }
+  };
+
+  const updateVideo = async (id: string, updates: Partial<SummaryData>) => {
+    try {
+      setIsSaving(true);
+      const res = await fetch(`/api/videos/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      const result = await res.json();
+      if (result.success) {
+        setHistory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+        if (data && data.id === id) {
+          setData(prev => prev ? { ...prev, ...updates } : null);
+        }
+      }
+    } catch (err) {
+      console.error("Update failed", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleFavorite = (item: SummaryData) => {
+    if (!item.id) return;
+    updateVideo(item.id, { is_favorite: !item.is_favorite });
+  };
+
+  const saveNotes = () => {
+    if (!data?.id) return;
+    updateVideo(data.id, { notes: notesDraft });
+    setIsEditingNotes(false);
+  };
+
+  const filteredHistory = history.filter(item => {
+    if (!searchQuery) return true;
+    const lowerQ = searchQuery.toLowerCase();
+    const tagMatch = item.tags?.some(tag => tag.toLowerCase().includes(lowerQ));
+    return (
+      tagMatch ||
+      item.title?.toLowerCase().includes(lowerQ) ||
+      item.author?.toLowerCase().includes(lowerQ) ||
+      item.summary?.toLowerCase().includes(lowerQ) ||
+      item.transcription?.toLowerCase().includes(lowerQ) ||
+      item.notes?.toLowerCase().includes(lowerQ)
+    );
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +239,15 @@ export default function App() {
               <div className="md:col-span-4 md:row-span-3 bg-slate-900 rounded-3xl border border-slate-800 p-4 flex flex-col gap-3 relative overflow-hidden">
                 <div className="relative aspect-video rounded-xl bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+                  <div className="absolute top-2 right-2 z-20">
+                    <button 
+                      onClick={() => toggleFavorite(data)}
+                      disabled={isSaving}
+                      className={`p-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10 hover:bg-black/60 transition ${isSaving ? 'opacity-50' : ''}`}
+                    >
+                      <Star className={`w-4 h-4 ${data.is_favorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />
+                    </button>
+                  </div>
                   <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center z-10">
                      <Video className="w-4 h-4 text-white" />
                   </div>
@@ -173,8 +257,13 @@ export default function App() {
                   <h2 className="text-sm font-bold text-white leading-tight truncate">{data.title || "Untitled Video"}</h2>
                   <p className="text-xs text-slate-500">@{data.author}</p>
                 </div>
-                <div className="flex gap-2 mt-auto relative z-10">
+                <div className="flex flex-wrap gap-2 mt-auto relative z-10">
                    <span className="px-2 py-1 bg-[#fe2c55]/10 text-[#fe2c55] rounded-md text-[10px] font-bold uppercase">Processed</span>
+                   {data.tags?.map((tag, i) => (
+                     <span key={i} className="px-2 py-1 bg-slate-800 text-slate-300 rounded-md text-[10px] font-bold uppercase flex items-center gap-1">
+                       <Tag className="w-3 h-3 text-slate-400" /> {tag}
+                     </span>
+                   ))}
                 </div>
               </div>
 
@@ -203,22 +292,49 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 4 (replacing knowledge map): Transcript */}
+              {/* Box 4: Transcript / Notes */}
               <div className="md:col-span-4 md:row-span-3 bg-slate-900 rounded-3xl border border-slate-800 p-5 flex flex-col gap-3 min-h-[250px]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Transcript</h3>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex gap-4">
+                    <h3 className={`text-xs font-bold uppercase tracking-wider cursor-pointer transition ${!isEditingNotes ? 'text-white' : 'text-slate-500'}`} onClick={() => { setIsEditingNotes(false); }}>Transcript</h3>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider cursor-pointer transition ${isEditingNotes ? 'text-white' : 'text-slate-500'}`} onClick={() => { setNotesDraft(data.notes || ''); setIsEditingNotes(true); }}>My Notes</h3>
+                  </div>
+                  {isEditingNotes && (
+                    <button 
+                      onClick={saveNotes}
+                      disabled={isSaving}
+                      className="px-3 py-1 bg-[#25f4ee]/20 text-[#25f4ee] hover:bg-[#25f4ee]/30 transition rounded-lg text-[10px] font-bold flex items-center gap-1"
+                    >
+                      <Save className="w-3 h-3" /> Save
+                    </button>
+                  )}
+                </div>
+                
                 <div className="flex-grow overflow-y-auto custom-scrollbar pr-2 h-0">
-                   <p className="text-xs text-slate-500 leading-relaxed font-mono whitespace-pre-wrap">{data.transcription}</p>
+                   {!isEditingNotes ? (
+                     <p className="text-xs text-slate-500 leading-relaxed font-mono whitespace-pre-wrap">{data.transcription}</p>
+                   ) : (
+                     <textarea
+                       className="w-full h-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-sm text-slate-300 focus:outline-none focus:border-[#25f4ee] resize-none"
+                       placeholder="Add your personal notes, ideas, or to-dos related to this video..."
+                       value={notesDraft}
+                       onChange={(e) => setNotesDraft(e.target.value)}
+                     />
+                   )}
                 </div>
-                <div className="mt-auto grid grid-cols-2 gap-4 shrink-0 pt-2">
-                   <div className="bg-slate-950/50 p-3 rounded-2xl border border-slate-800">
-                     <p className="text-[10px] text-slate-500 font-bold uppercase">Status</p>
-                     <p className="text-sm font-bold text-[#25f4ee]">Complete</p>
-                   </div>
-                   <div className="bg-slate-950/50 p-3 rounded-2xl border border-slate-800">
-                     <p className="text-[10px] text-slate-500 font-bold uppercase">Source ID</p>
-                     <p className="text-sm font-bold text-white truncate">#{data.video_id}</p>
-                   </div>
-                </div>
+                
+                {!isEditingNotes && (
+                  <div className="mt-auto grid grid-cols-2 gap-4 shrink-0 pt-2">
+                     <div className="bg-slate-950/50 p-3 rounded-2xl border border-slate-800">
+                       <p className="text-[10px] text-slate-500 font-bold uppercase">Status</p>
+                       <p className="text-sm font-bold text-[#25f4ee]">Complete</p>
+                     </div>
+                     <div className="bg-slate-950/50 p-3 rounded-2xl border border-slate-800">
+                       <p className="text-[10px] text-slate-500 font-bold uppercase">Source ID</p>
+                       <p className="text-sm font-bold text-white truncate">#{data.video_id}</p>
+                     </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -231,19 +347,32 @@ export default function App() {
 
           {/* Box 3: History */}
           <div className="md:col-span-3 md:row-span-6 bg-slate-900/40 rounded-3xl border border-slate-800/50 p-5 flex flex-col gap-4 min-h-[300px]">
-             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Recent Library</h3>
+             <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Recent Library</h3>
+             </div>
+             <div className="relative">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text" 
+                  placeholder="Search tags, topics..." 
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-300 focus:outline-none focus:border-[#25f4ee]"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+             </div>
              <div className="space-y-3 overflow-y-auto custom-scrollbar flex-grow h-0 pr-1">
-               {history.length === 0 ? (
-                 <p className="text-xs text-slate-500 text-center py-4">No recent history.</p>
+               {filteredHistory.length === 0 ? (
+                 <p className="text-xs text-slate-500 text-center py-4">No matching videos.</p>
                ) : (
-                 history.map((item, idx) => (
+                 filteredHistory.map((item, idx) => (
                    <div key={idx} className="group p-3 bg-slate-900 border border-slate-800 rounded-xl flex gap-3 hover:border-slate-700 transition-colors cursor-pointer" onClick={() => { setData(item); setStatus('success'); }}>
-                      <div className="w-12 h-12 rounded-lg bg-slate-800 shrink-0 flex items-center justify-center group-hover:bg-[#fe2c55]/10 transition-colors">
+                      <div className="w-12 h-12 rounded-lg bg-slate-800 shrink-0 flex items-center justify-center group-hover:bg-[#fe2c55]/10 transition-colors relative">
+                        {item.is_favorite && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 absolute -top-1 -right-1 drop-shadow-md" />}
                         <Video className="w-4 h-4 text-slate-500 group-hover:text-[#fe2c55]" />
                       </div>
                       <div className="min-w-0 flex flex-col justify-center">
                          <p className="text-xs font-bold text-white truncate leading-tight mb-0.5">{item.title || "Untitled Video"}</p>
-                         <p className="text-[10px] text-slate-500">@{item.author || "unknown"}</p>
+                         <p className="text-[10px] text-slate-500 truncate">@{item.author || "unknown"}</p>
                       </div>
                    </div>
                  ))

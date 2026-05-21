@@ -51,10 +51,20 @@ L'application dépend de Supabase pour le stockage. Vous devez créer :
      title text,
      transcription text,
      summary text,
+     tags jsonb default '[]'::jsonb,
+     is_favorite boolean default false,
+     notes text,
      created_at timestamp with time zone default timezone('utc'::text, now()) not null
    );
    ```
-3. **Policies (RLS)** : Pour permettre au backend d'écrire dans la base de données, vous devez accorder ou désactiver (temporairement) les Règles de Sécurité RLS pour l'insertion (Insert).
+   *(Si vous avez déjà créé la table dans la Phase 1, exécutez ceci pour la mettre à jour :)*
+   ```sql
+   alter table public.tiktok_summaries 
+     add column tags jsonb default '[]'::jsonb,
+     add column is_favorite boolean default false,
+     add column notes text;
+   ```
+3. **Policies (RLS)** : Pour permettre au backend d'écrire dans la base de données, vous devez accorder ou désactiver (temporairement) les Règles de Sécurité RLS pour l'insertion (Insert) et la mise à jour (Update).
    ```sql
    -- Exemple: Désactiver le RLS pour des tests locaux rapides
    alter table public.tiktok_summaries disable row level security;

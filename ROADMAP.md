@@ -19,10 +19,10 @@ Le but ultime de ce projet est de transformer une simple "sauvegarde de vidéos"
 ## 🏗️ Phase 2 : Organisation & Recherche (Court terme)
 *L'objectif ici est de rendre la consultation de la base de connaissances plus agréable et de mieux organiser le flux grandissant d'informations.*
 
-- **Système de Catégorisation & Tags** : Demander à Gemini de générer automatiquement 3 à 5 mots-clés ("Productivité", "Développement Web", "Recette") à l'enregistrement et pouvoir filtrer par ces tags.
-- **Recherche Full-Text** : Implémenter une barre de recherche en haut de la liste pour retrouver un TikTok par un mot clé de son résumé ou de sa transcription.
-- **Édition Manuelle** : Pouvoir corriger la transcription ou rajouter des notes personnelles directement sur la fiche d'une vidéo sauvegardée.
-- **Support des Favoris** : Marquer les meilleures trouvailles avec une étoile ⭐ pour y accéder rapidement.
+- [x] **Système de Catégorisation & Tags** : Demander à Gemini de générer automatiquement 3 à 5 mots-clés ("Productivité", "Développement Web", "Recette") à l'enregistrement et pouvoir filtrer par ces tags.
+- [x] **Recherche Full-Text** : Implémenter une barre de recherche en haut de la liste pour retrouver un TikTok par un mot clé de son résumé ou de sa transcription.
+- [x] **Édition Manuelle** : Pouvoir corriger la transcription ou rajouter des notes personnelles directement sur la fiche d'une vidéo sauvegardée.
+- [x] **Support des Favoris** : Marquer les meilleures trouvailles avec une étoile ⭐ pour y accéder rapidement.
 
 ---
 
