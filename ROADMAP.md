@@ -29,13 +29,13 @@ Le but ultime de ce projet est de transformer une simple "sauvegarde de vidéos"
 ## 🚀 Phase 3 : Mode "Vrai Second Brain" (Moyen terme)
 *Ici on intègre le RAG (Retrieval-Augmented Generation) pour discuter littéralement avec ses propres données TikTok.*
 
-- **Recherche Vectorielle (Vector Search)** : Utiliser `pgvector` dans Supabase pour encoder les résumés sous forme d'embeddings. 
-- **Mode "Chat UI"** : Interface façon ChatGPT où l'on pourrait demander : *"Quels étaient les 3 outils d'IA pour générer de la musique dont j'ai sauvegardé les vidéos la semaine dernière ?"*.
-- **Extraction Structurée Automatique** : Lors de l'analyse IA, forcer la détection d'entités spécifiques :
+- [x] **Recherche Vectorielle (Vector Search)** : Utiliser `pgvector` dans Supabase pour encoder les résumés sous forme d'embeddings. 
+- [x] **Mode "Chat UI"** : Interface façon ChatGPT où l'on pourrait demander : *"Quels étaient les 3 outils d'IA pour générer de la musique dont j'ai sauvegardé les vidéos la semaine dernière ?"*.
+- [x] **Extraction Structurée Automatique** : Lors de l'analyse IA, forcer la détection d'entités spécifiques :
   - Outils mentionnés (avec génération des liens potentiels)
   - Livres recommandés
   - Actions (To-Do list extraite de la vidéo)
-- **Exports Intégrés** : Bouton d'export en 1 clic vers Notion, Obsidian (Markdown format) ou Roam Research.
+- [x] **Exports Intégrés** : Bouton d'export en 1 clic vers Notion, Obsidian (Markdown format) ou Roam Research.
 
 ---
 

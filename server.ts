@@ -102,11 +102,15 @@ async function startServer() {
 1. Transcris l'audio de cette vidéo le plus précisément possible en français.
 2. Fournis un résumé concis sous forme de liste à puces des concepts clés, points à retenir ou événements en français.
 3. Génère 3 à 5 tags/mots-clés pertinents en français (ex: "Productivité", "Développement Web", "Recette").
+4. Extrais les outils mentionnés (tools), les livres recommandés (books), et génère une liste d'actions/To-Do (actions).
 Format ton retour uniquement en JSON comme ceci:
 {
   "transcription": "...",
   "summary": "...",
-  "tags": ["tag1", "tag2", "tag3"]
+  "tags": ["tag1", "tag2"],
+  "tools": ["tool1", "tool2"],
+  "books": ["book1"],
+  "actions": ["action1", "action2"]
 }
 Retourne seulement le JSON sans blocs de code markdown.`;
 
@@ -165,6 +169,23 @@ Retourne seulement le JSON sans blocs de code markdown.`;
                          JSON.stringify(aiResult.summary) || 'No summary available';
 
       const tags = Array.isArray(aiResult.tags) ? aiResult.tags : [];
+      const tools = Array.isArray(aiResult.tools) ? aiResult.tools : [];
+      const books = Array.isArray(aiResult.books) ? aiResult.books : [];
+      const actions = Array.isArray(aiResult.actions) ? aiResult.actions : [];
+
+      // Generate embedding for Vector Search
+      let embeddingVector = null;
+      try {
+        console.log(`[3.8/4] Generating vector embedding...`);
+        const embedRes = await ai.models.embedContent({
+          model: 'text-embedding-004',
+          contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`
+        });
+        embeddingVector = embedRes.embeddings?.[0]?.values || null;
+      } catch (embErr) {
+        console.warn("Could not generate embedding:", embErr);
+      }
+
       let entry: any = {
         tiktok_url: bucketUrl || url || "local_upload",
         video_id: videoId,
@@ -173,8 +194,12 @@ Retourne seulement le JSON sans blocs de code markdown.`;
         transcription: finalTranscription,
         summary: finalSummary,
         tags: tags,
+        tools: tools,
+        books: books,
+        actions: actions,
         is_favorite: false,
         notes: '',
+        embedding: embeddingVector,
         created_at: new Date().toISOString()
       };
 
@@ -182,23 +207,27 @@ Retourne seulement le JSON sans blocs de code markdown.`;
         // Try to insert with new columns
         const { error, data: insertedData } = await supabase.from('tiktok_summaries').insert([entry]).select().single();
         if (error) {
-           if (error.code === '42703') { // Column does not exist
-             console.warn("New columns not found, using legacy schema.");
+           if (error.code === '42703' || error.message.includes('embedding')) { // Column does not exist
+             console.warn("New Phase 3 columns not found, using legacy schema.");
              const fallbackEntry = { ...entry };
              delete fallbackEntry.tags;
+             delete fallbackEntry.tools;
+             delete fallbackEntry.books;
+             delete fallbackEntry.actions;
              delete fallbackEntry.is_favorite;
              delete fallbackEntry.notes;
+             delete fallbackEntry.embedding;
              
              const { error: fallbackError, data: fallbackData } = await supabase.from('tiktok_summaries').insert([fallbackEntry]).select().single();
              if (fallbackError) {
-                console.error("Supabase insert error:", fallbackError);
-                return res.status(500).json({ error: `Database error: ${fallbackError.message}` });
+                console.error("Supabase insert error (fallback):", fallbackError);
+                return res.status(500).json({ error: `Database error: ${fallbackError.message}. Make sure RLS is disabled in Supabase.` });
              } else {
                 entry = fallbackData;
              }
            } else {
              console.error("Supabase insert error:", error.message || JSON.stringify(error));
-             return res.status(500).json({ error: `Database error: ${error.message}` });
+             return res.status(500).json({ error: `Database error: ${error.message}. Hint: if RLS violated, disable RLS in Supabase!` });
            }
         } else {
            entry = insertedData;
@@ -239,6 +268,59 @@ Retourne seulement le JSON sans blocs de code markdown.`;
        return res.status(500).json({ error: error.message });
     }
     res.json({ success: true, data });
+  });
+
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { query } = req.body;
+      if (!query) return res.status(400).json({ error: "Query is required." });
+
+      let contextText = "";
+      let similarVideos = [];
+
+      if (supabase) {
+         // Generate embedding for user query
+         const embedRes = await ai.models.embedContent({
+            model: 'text-embedding-004',
+            contents: query
+         });
+         const queryEmbedding = embedRes.embeddings?.[0]?.values;
+
+         if (queryEmbedding) {
+            // Call Supabase RPC 'match_videos'
+            const { data: matches, error } = await supabase.rpc('match_videos', {
+               query_embedding: queryEmbedding,
+               match_threshold: 0.2, // Adjust as needed
+               match_count: 5 // Get top 5 relevant videos
+            });
+
+            if (!error && matches && matches.length > 0) {
+               similarVideos = matches;
+               contextText = matches.map((m: any) => `Video: ${m.title}\nSummary: ${m.summary}\nTranscription: ${m.transcription || ''}\n---\n`).join("\n");
+            }
+         }
+      }
+
+      // Generate response using Gemini
+      const prompt = `Tu es un assistant IA pour un "Second Cerveau" Tiktok. L'utilisateur te pose une question sur les vidéos qu'il a sauvegardées.
+      Voici le contexte extrait de sa base de connaissances (les vidéos les plus pertinentes par rapport à sa question) :
+      
+      <contexte>
+      ${contextText || "Aucun contexte trouvé. Réponds à la question de l'utilisateur de manière générale, ou indique que tu n'as pas l'information dans ton Second Cerveau."}
+      </contexte>
+
+      Réponds à l'utilisateur de manière précise, utile et naturelle en te basant OBLIGATOIREMENT sur ce contexte s'il y en a. Si le contexte ne contient pas la réponse, dis-le poliment.`;
+
+      const response = await ai.models.generateContent({
+         model: 'gemini-2.5-flash',
+         contents: [prompt, `Question de l'utilisateur: ${query}`]
+      });
+
+      res.json({ response: response.text, sources: similarVideos });
+    } catch (err: any) {
+      console.error("Chat API error:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Vite middleware for development

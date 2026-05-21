@@ -41,8 +41,11 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### 2. Configuration Supabase
 L'application dépend de Supabase pour le stockage. Vous devez créer :
 1. **Un bucket de stockage** : Allez dans "Storage" sur Supabase et créez un bucket public nommé `videos`.
-2. **La table de données** : Exécutez ce script SQL dans l'éditeur SQL de Supabase :
+2. **La table de données (Phase 3 Intégrée)** : Exécutez ce script SQL dans l'éditeur SQL de Supabase :
    ```sql
+   -- Activer l'extension pgvector
+   create extension if not exists vector;
+
    create table public.tiktok_summaries (
      id uuid default gen_random_uuid() primary key,
      tiktok_url text,
@@ -52,24 +55,58 @@ L'application dépend de Supabase pour le stockage. Vous devez créer :
      transcription text,
      summary text,
      tags jsonb default '[]'::jsonb,
+     tools jsonb default '[]'::jsonb,
+     books jsonb default '[]'::jsonb,
+     actions jsonb default '[]'::jsonb,
      is_favorite boolean default false,
      notes text,
+     embedding vector(768),
      created_at timestamp with time zone default timezone('utc'::text, now()) not null
    );
+
+   -- Créer la fonction de recherche de similarité pour le Chat "Second Cerveau"
+   create or replace function match_videos (
+     query_embedding vector(768),
+     match_threshold float,
+     match_count int
+   )
+   returns table (
+     id uuid,
+     title text,
+     summary text,
+     transcription text,
+     similarity float
+   )
+   language sql stable
+   as $$
+     select
+       tiktok_summaries.id,
+       tiktok_summaries.title,
+       tiktok_summaries.summary,
+       tiktok_summaries.transcription,
+       1 - (tiktok_summaries.embedding <=> query_embedding) as similarity
+     from tiktok_summaries
+     where 1 - (tiktok_summaries.embedding <=> query_embedding) > match_threshold
+     order by similarity desc
+     limit match_count;
+   $$;
    ```
-   *(Si vous avez déjà créé la table dans la Phase 1, exécutez ceci pour la mettre à jour :)*
+   *(Si vous avez déjà créé la table dans la Phase 1/2, exécutez ceci pour la mettre à jour :)*
    ```sql
+   create extension if not exists vector;
    alter table public.tiktok_summaries 
-     add column tags jsonb default '[]'::jsonb,
-     add column is_favorite boolean default false,
-     add column notes text;
+     add column tools jsonb default '[]'::jsonb,
+     add column books jsonb default '[]'::jsonb,
+     add column actions jsonb default '[]'::jsonb,
+     add column embedding vector(768);
+   -- N'oubliez pas d'exécuter la fonction `match_videos` au-dessus.
    ```
-3. **Policies (RLS)** : Pour permettre au backend d'écrire dans la base de données, vous devez accorder ou désactiver (temporairement) les Règles de Sécurité RLS pour l'insertion (Insert) et la mise à jour (Update).
+3. **Policies (RLS) - TRÈS IMPORTANT** : Pour permettre au backend d'écrire dans la base de données, vous **devez désactiver les Règles de Sécurité RLS** (Row Level Security) (ou fournir une SERVICE_ROLE_KEY).
+Si vous avez l'erreur *"new row violates row-level security policy"*, vous devez impérativement exécuter ceci :
    ```sql
-   -- Exemple: Désactiver le RLS pour des tests locaux rapides
+   -- Désactiver le RLS pour autoriser l'insertion locale
    alter table public.tiktok_summaries disable row level security;
    ```
-   *(Note : En production, il est conseillé de configurer le RLS proprement avec un `SERVICE_ROLE_KEY` côté backend au lieu de la clé anonyme).*
 
 ### 3. Lancer l'application
 

@@ -14,6 +14,9 @@ interface SummaryData {
   transcription: string;
   summary: string;
   tags?: string[];
+  tools?: string[];
+  books?: string[];
+  actions?: string[];
   is_favorite?: boolean;
   notes?: string;
   created_at: string;
@@ -29,6 +32,12 @@ export default function App() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<SummaryData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'capture' | 'chat'>('capture');
+
+  // Chat state
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{role: 'user'|'ai', text: string, sources?: any[]}[]>([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Editing state for transcription/notes
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -100,6 +109,30 @@ export default function App() {
     );
   });
 
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const query = chatInput;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', text: query }]);
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setChatMessages(prev => [...prev, { role: 'ai', text: json.response, sources: json.sources }]);
+    } catch (err: any) {
+      setChatMessages(prev => [...prev, { role: 'ai', text: `Erreur: ${err.message}` }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMode === 'url' && (!url.trim() || !url.includes('tiktok.com'))) {
@@ -161,16 +194,86 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-4">
+          <div className="bg-slate-900 border border-slate-800 p-1 rounded-xl flex">
+            <button 
+              onClick={() => setViewMode('capture')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'capture' ? 'bg-[#25f4ee]/20 text-[#25f4ee]' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Capture
+            </button>
+            <button 
+              onClick={() => setViewMode('chat')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'chat' ? 'bg-[#fe2c55]/20 text-[#fe2c55]' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Chat (Cerveau)
+            </button>
+          </div>
           <div className="bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
             <span className="text-xs font-medium text-slate-400 hidden sm:inline">Gemini 2.5 : Actif</span>
           </div>
-          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 hidden sm:block"></div>
         </div>
       </nav>
 
       <main className="max-w-6xl mx-auto w-full flex-grow flex flex-col">
-        <div className="mb-6 space-y-3">
+        {viewMode === 'chat' ? (
+          <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden p-4 relative">
+            <div className="flex-grow overflow-y-auto custom-scrollbar p-4 space-y-6">
+               {chatMessages.length === 0 ? (
+                 <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+                   <BrainCircuit className="w-16 h-16 text-[#fe2c55] mb-4" />
+                   <h2 className="text-xl font-bold">Votre Second Cerveau est à l'écoute</h2>
+                   <p className="text-sm max-w-sm mt-2">Posez-moi une question sur les vidéos que vous avez enregistrées ("Quels sont les outils d'IA mentionnés le mois dernier ?", etc.)</p>
+                 </div>
+               ) : (
+                 chatMessages.map((msg, i) => (
+                   <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                     <div className={`max-w-[80%] rounded-2xl p-4 ${msg.role === 'user' ? 'bg-[#fe2c55] text-white' : 'bg-slate-800 text-slate-200'}`}>
+                       <div className="prose prose-invert prose-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>') }} />
+                     </div>
+                     {msg.sources && msg.sources.length > 0 && (
+                       <div className="mt-2 flex flex-wrap gap-2">
+                         {msg.sources.map((s, idx) => (
+                           <span key={idx} className="text-[10px] bg-slate-800 border border-slate-700 px-2 py-1 rounded text-slate-400">
+                             Source: {s.title}
+                           </span>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 ))
+               )}
+               {isChatLoading && (
+                 <div className="flex items-start">
+                   <div className="bg-slate-800 rounded-2xl p-4 flex items-center gap-3 text-slate-400">
+                     <Loader2 className="w-5 h-5 animate-spin" /> Je recherche dans vos données...
+                   </div>
+                 </div>
+               )}
+            </div>
+            
+            <form onSubmit={handleChatSubmit} className="mt-4 shrink-0 relative">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="Posez une question à votre Second Cerveau..."
+                disabled={isChatLoading}
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-4 pl-6 pr-16 text-slate-200 focus:outline-none focus:border-[#fe2c55] transition-colors"
+                required
+              />
+              <button 
+                type="submit"
+                disabled={isChatLoading}
+                className="absolute right-2 top-2 bottom-2 aspect-square bg-[#fe2c55] text-white rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                <Sparkles className="w-5 h-5" />
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 space-y-3">
           <div className="flex gap-2">
             <button
               onClick={() => { setInputMode('url'); setStatus('idle'); setErrorMsg(''); }}
@@ -286,9 +389,47 @@ export default function App() {
                        );
                      })}
                    </div>
+
+                   {/* Structured Extractions */}
+                   <div className="mt-4 flex gap-4 flex-wrap text-[10px]">
+                     {data.tools && data.tools.length > 0 && (
+                       <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/50 flex-1 min-w-[120px]">
+                         <span className="font-bold uppercase tracking-wider text-slate-300 block mb-2">🛠️ Outils</span>
+                         <ul className="space-y-1">
+                           {data.tools.map((t, idx) => <li key={idx} className="text-slate-400">• {t}</li>)}
+                         </ul>
+                       </div>
+                     )}
+                     {data.books && data.books.length > 0 && (
+                       <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/50 flex-1 min-w-[120px]">
+                         <span className="font-bold uppercase tracking-wider text-slate-300 block mb-2">📚 Livres</span>
+                         <ul className="space-y-1">
+                           {data.books.map((b, idx) => <li key={idx} className="text-slate-400">• {b}</li>)}
+                         </ul>
+                       </div>
+                     )}
+                     {data.actions && data.actions.length > 0 && (
+                       <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/50 flex-1 min-w-[120px]">
+                         <span className="font-bold uppercase tracking-wider text-slate-300 block mb-2">✅ Actions</span>
+                         <ul className="space-y-1">
+                           {data.actions.map((a, idx) => <li key={idx} className="text-slate-400">• {a}</li>)}
+                         </ul>
+                       </div>
+                     )}
+                   </div>
+
                 </div>
                 <div className="mt-auto flex gap-3 pt-2 shrink-0">
-                   <button className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition">Copier le Markdown</button>
+                   <button 
+                     onClick={() => {
+                       const md = `# ${data.title}\n\n**Auteur:** @${data.author}\n**Tags:** ${data.tags?.join(', ')}\n\n## Résumé\n${data.summary}\n\n${data.tools?.length ? `## Outils\n${data.tools.map(t=>`- ${t}`).join('\n')}\n\n` : ''}${data.books?.length ? `## Livres\n${data.books.map(b=>`- ${b}`).join('\n')}\n\n` : ''}${data.actions?.length ? `## Actions\n${data.actions.map(a=>`- [ ] ${a}`).join('\n')}\n\n` : ''}## Notes\n${data.notes || ''}`;
+                       navigator.clipboard.writeText(md);
+                       alert("Markdown copié ! Prêt pour Obsidian / Notion.");
+                     }}
+                     className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition"
+                   >
+                     Exporter Markdown (Obsidian / Notion)
+                   </button>
                 </div>
               </div>
 
@@ -381,7 +522,8 @@ export default function App() {
           </div>
 
         </div>
-
+        </>
+        )}
       </main>
 
       <footer className="w-full max-w-6xl mx-auto mt-6 flex justify-between items-center text-[10px] text-slate-600 font-medium pb-2">
