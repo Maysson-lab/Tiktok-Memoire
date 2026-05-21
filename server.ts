@@ -98,17 +98,17 @@ async function startServer() {
       }
 
       // Simple prompt acting as the brain
-      const prompt = `You are a "Second Brain" assistant for short videos. 
-1. Transcribe the audio from this video as accurately as possible.
-2. Provide a concise bulleted summary of the core concepts, takeaways, or events.
-3. Generate 3 to 5 relevant tags/keywords (e.g., "Productivity", "Web Development", "Recipe").
-Format your response as a JSON object exactly like this:
+      const prompt = `Tu es un assistant "Second Cerveau" pour des vidéos courtes. 
+1. Transcris l'audio de cette vidéo le plus précisément possible en français.
+2. Fournis un résumé concis sous forme de liste à puces des concepts clés, points à retenir ou événements en français.
+3. Génère 3 à 5 tags/mots-clés pertinents en français (ex: "Productivité", "Développement Web", "Recette").
+Format ton retour uniquement en JSON comme ceci:
 {
   "transcription": "...",
   "summary": "...",
   "tags": ["tag1", "tag2", "tag3"]
 }
-Only return the JSON without markdown code blocks.`;
+Retourne seulement le JSON sans blocs de code markdown.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
