@@ -14,6 +14,51 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
+// Helper pour l'intégration OpenRouter Embedding
+async function getEmbedding(text: string): Promise<number[] | null> {
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    try {
+      console.log("Using OpenRouter for embeddings...");
+      const res = await fetch("https://openrouter.ai/api/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${orKey}`,
+           "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "nomic-ai/nomic-embed-text-v1.5",
+          input: text
+        })
+      });
+      const data = await res.json();
+      if (data.data && data.data.length > 0) {
+         // nomic usually returns 768 length vectors natively
+         return data.data[0].embedding;
+      }
+    } catch(err) {
+      console.error("OpenRouter embedding failed:", err);
+    }
+  }
+
+  // Fallback Google Gemini si OpenRouter non configuré ou échec
+  const embModels = ['gemini-embedding-2', 'text-embedding-004', 'gemini-embedding-001'];
+  for (const m of embModels) {
+    try {
+      console.log(`Generating fallback vector embedding with ${m}...`);
+      const embedRes = await ai.models.embedContent({
+        model: m,
+        contents: text,
+        config: m.includes('001') ? undefined : { outputDimensionality: 768 }
+      });
+      return embedRes.embeddings?.[0]?.values || null;
+    } catch (embErr: any) {
+      console.warn(`Could not generate embedding with ${m}:`, embErr.message);
+    }
+  }
+  return null;
+}
+
 const downloadsDir = path.join(process.cwd(), "downloads");
 if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir);
 const upload = multer({ dest: downloadsDir });
@@ -188,22 +233,8 @@ Retourne seulement le JSON sans blocs de code markdown.`;
       const actions = Array.isArray(aiResult.actions) ? aiResult.actions : [];
 
       // Generate embedding for Vector Search
-      let embeddingVector = null;
-      const embModels = ['gemini-embedding-2', 'text-embedding-004', 'gemini-embedding-001'];
-      for (const m of embModels) {
-        try {
-          console.log(`[3.8/4] Generating vector embedding with ${m}...`);
-          const embedRes = await ai.models.embedContent({
-            model: m,
-            contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`,
-            config: m.includes('001') ? undefined : { outputDimensionality: 768 } // 001 doesn't support dimensionality
-          });
-          embeddingVector = embedRes.embeddings?.[0]?.values || null;
-          break;
-        } catch (embErr: any) {
-          console.warn(`Could not generate embedding with ${m}:`, embErr.message);
-        }
-      }
+      console.log(`[3.8/4] Generating vector embedding...`);
+      let embeddingVector = await getEmbedding(`Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`);
 
       let entry: any = {
         tiktok_url: bucketUrl || url || "local_upload",
@@ -299,21 +330,7 @@ Retourne seulement le JSON sans blocs de code markdown.`;
 
       if (supabase) {
          // Generate embedding for user query
-         let queryEmbedding = null;
-         const embModels = ['gemini-embedding-2', 'text-embedding-004', 'gemini-embedding-001'];
-         for (const m of embModels) {
-           try {
-             const embedRes = await ai.models.embedContent({
-                model: m,
-                contents: query,
-                config: m.includes('001') ? undefined : { outputDimensionality: 768 }
-             });
-             queryEmbedding = embedRes.embeddings?.[0]?.values;
-             break;
-           } catch(e: any) {
-             console.log(`Query embedding with ${m} failed:`, e.message);
-           }
-         }
+         let queryEmbedding = await getEmbedding(query);
 
          if (queryEmbedding) {
             // Call Supabase RPC 'match_videos'
