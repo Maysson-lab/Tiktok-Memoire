@@ -114,20 +114,34 @@ Format ton retour uniquement en JSON comme ceci:
 }
 Retourne seulement le JSON sans blocs de code markdown.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          { fileData: { fileUri: aiFile.uri, mimeType: aiFile.mimeType } },
-          prompt
-        ],
-        config: {
-          responseMimeType: "application/json",
+      let response;
+      const fallbackModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+      for (const m of fallbackModels) {
+        try {
+          response = await ai.models.generateContent({
+            model: m,
+            contents: [
+              { fileData: { fileUri: aiFile.uri, mimeType: aiFile.mimeType } },
+              prompt
+            ],
+            config: {
+              responseMimeType: "application/json",
+            }
+          });
+          break; // Success
+        } catch (err: any) {
+          if (err.status === 404 || err.message?.includes('not found')) {
+            console.log(`Model ${m} failed with 404, trying next...`);
+            if (m === fallbackModels[fallbackModels.length - 1]) throw err;
+          } else {
+            throw err;
+          }
         }
-      });
+      }
       
       let aiResult;
       try {
-        aiResult = JSON.parse(response.text || "{}");
+        aiResult = JSON.parse(response?.text || "{}");
       } catch (e) {
          // Fallback if parsing fails
          console.warn("Failed to parse JSON, falling back to raw output");
@@ -175,16 +189,20 @@ Retourne seulement le JSON sans blocs de code markdown.`;
 
       // Generate embedding for Vector Search
       let embeddingVector = null;
-      try {
-        console.log(`[3.8/4] Generating vector embedding...`);
-        const embedRes = await ai.models.embedContent({
-          model: 'gemini-embedding-2',
-          contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`,
-          config: { outputDimensionality: 768 }
-        });
-        embeddingVector = embedRes.embeddings?.[0]?.values || null;
-      } catch (embErr) {
-        console.warn("Could not generate embedding:", embErr);
+      const embModels = ['gemini-embedding-2', 'text-embedding-004', 'gemini-embedding-001'];
+      for (const m of embModels) {
+        try {
+          console.log(`[3.8/4] Generating vector embedding with ${m}...`);
+          const embedRes = await ai.models.embedContent({
+            model: m,
+            contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`,
+            config: m.includes('001') ? undefined : { outputDimensionality: 768 } // 001 doesn't support dimensionality
+          });
+          embeddingVector = embedRes.embeddings?.[0]?.values || null;
+          break;
+        } catch (embErr: any) {
+          console.warn(`Could not generate embedding with ${m}:`, embErr.message);
+        }
       }
 
       let entry: any = {
@@ -281,12 +299,21 @@ Retourne seulement le JSON sans blocs de code markdown.`;
 
       if (supabase) {
          // Generate embedding for user query
-         const embedRes = await ai.models.embedContent({
-            model: 'gemini-embedding-2',
-            contents: query,
-            config: { outputDimensionality: 768 }
-         });
-         const queryEmbedding = embedRes.embeddings?.[0]?.values;
+         let queryEmbedding = null;
+         const embModels = ['gemini-embedding-2', 'text-embedding-004', 'gemini-embedding-001'];
+         for (const m of embModels) {
+           try {
+             const embedRes = await ai.models.embedContent({
+                model: m,
+                contents: query,
+                config: m.includes('001') ? undefined : { outputDimensionality: 768 }
+             });
+             queryEmbedding = embedRes.embeddings?.[0]?.values;
+             break;
+           } catch(e: any) {
+             console.log(`Query embedding with ${m} failed:`, e.message);
+           }
+         }
 
          if (queryEmbedding) {
             // Call Supabase RPC 'match_videos'
@@ -313,12 +340,26 @@ Retourne seulement le JSON sans blocs de code markdown.`;
 
       Réponds à l'utilisateur de manière précise, utile et naturelle en te basant OBLIGATOIREMENT sur ce contexte s'il y en a. Si le contexte ne contient pas la réponse, dis-le poliment.`;
 
-      const response = await ai.models.generateContent({
-         model: 'gemini-2.5-flash',
-         contents: [prompt, `Question de l'utilisateur: ${query}`]
-      });
+      let response;
+      const fallbackModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+      for (const m of fallbackModels) {
+        try {
+          response = await ai.models.generateContent({
+             model: m,
+             contents: [prompt, `Question de l'utilisateur: ${query}`]
+          });
+          break;
+        } catch (err: any) {
+          if (err.status === 404 || err.message?.includes('not found')) {
+            console.log(`Chat Model ${m} failed with 404, trying next...`);
+            if (m === fallbackModels[fallbackModels.length - 1]) throw err;
+          } else {
+            throw err;
+          }
+        }
+      }
 
-      res.json({ response: response.text, sources: similarVideos });
+      res.json({ response: response?.text, sources: similarVideos });
     } catch (err: any) {
       console.error("Chat API error:", err);
       res.status(500).json({ error: err.message });
