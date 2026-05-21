@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 type SummaryStatus = 'idle' | 'fetching' | 'success' | 'error';
 
 import HistoryView from './components/HistoryView';
+import GraphView from './components/GraphView';
 
 export interface SummaryData {
   id?: string;
@@ -34,7 +35,7 @@ export default function App() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<SummaryData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'capture' | 'history' | 'chat'>('capture');
+  const [viewMode, setViewMode] = useState<'capture' | 'history' | 'chat' | 'graph'>('capture');
 
   // Chat state
   const [chatInput, setChatInput] = useState('');
@@ -210,6 +211,12 @@ export default function App() {
               Historique
             </button>
             <button 
+              onClick={() => setViewMode('graph')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'graph' ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Graphe
+            </button>
+            <button 
               onClick={() => setViewMode('chat')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'chat' ? 'bg-[#fe2c55]/20 text-[#fe2c55]' : 'text-slate-500 hover:text-slate-300'}`}
             >
@@ -226,6 +233,8 @@ export default function App() {
       <main className="max-w-6xl mx-auto w-full flex-grow flex flex-col">
         {viewMode === 'history' ? (
           <HistoryView history={history} onSelect={(item) => { setData(item); setStatus('success'); setViewMode('capture'); }} />
+        ) : viewMode === 'graph' ? (
+          <GraphView history={history} onSelect={(item) => { setData(item); setStatus('success'); setViewMode('capture'); }} />
         ) : viewMode === 'chat' ? (
           <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden p-4 relative">
             <div className="flex-grow overflow-y-auto custom-scrollbar p-4 space-y-6">

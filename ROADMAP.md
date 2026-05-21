@@ -1,11 +1,11 @@
-# 🗺️ Roadmap : TikTok Second Brain
+# 🗺️ Roadmap : RésuméAI (Second Brain)
 
 ## 🎯 Vision Long Terme
-Le but ultime de ce projet est de transformer une simple "sauvegarde de vidéos" en un **outil de gestion de la connaissance intelligent**. Il ne s'agit plus seulement de stocker des vidéos, mais de pouvoir s'y référer facilement, faire des recherches de concepts, et lier des outils (Obsidian, Notion).
+Le but ultime de ce projet est de transformer une simple "sauvegarde de vidéos" en un **outil de gestion de la connaissance intelligent**. Il ne s'agit plus seulement de stocker des vidéos, mais de pouvoir s'y référer facilement, faire des recherches sémantiques, et lier des outils comme Obsidian ou Notion depuis un graphe interactif.
 
 ---
 
-## ✅ Phase 1 : Fondations (MVP) - [Actuel]
+## ✅ Phase 1 : Fondations (MVP) - [Terminé]
 - [x] Interface Web moderne (React/Tailwind).
 - [x] Upload de fichiers vidéo MP4 en local.
 - [x] Parsing basique pour URL TikTok.
@@ -16,32 +16,33 @@ Le but ultime de ce projet est de transformer une simple "sauvegarde de vidéos"
 
 ---
 
-## 🏗️ Phase 2 : Organisation & Recherche (Court terme)
+## ✅ Phase 2 : Organisation & Recherche - [Terminé]
 *L'objectif ici est de rendre la consultation de la base de connaissances plus agréable et de mieux organiser le flux grandissant d'informations.*
 
-- [x] **Système de Catégorisation & Tags** : Demander à Gemini de générer automatiquement 3 à 5 mots-clés ("Productivité", "Développement Web", "Recette") à l'enregistrement et pouvoir filtrer par ces tags.
-- [x] **Recherche Full-Text** : Implémenter une barre de recherche en haut de la liste pour retrouver un TikTok par un mot clé de son résumé ou de sa transcription.
-- [x] **Édition Manuelle** : Pouvoir corriger la transcription ou rajouter des notes personnelles directement sur la fiche d'une vidéo sauvegardée.
+- [x] **Système de Catégorisation & Tags** : Génération automatique de 3 à 5 mots-clés ("Productivité", "Développement Web", "Recette").
+- [x] **Recherche Full-Text** : Implémenter une barre de recherche en haut de la liste pour retrouver un élément rapidement.
+- [x] **Édition Manuelle** : Pouvoir corriger la transcription ou rajouter des notes personnelles.
 - [x] **Support des Favoris** : Marquer les meilleures trouvailles avec une étoile ⭐ pour y accéder rapidement.
 
 ---
 
-## 🚀 Phase 3 : Mode "Vrai Second Brain" (Moyen terme)
-*Ici on intègre le RAG (Retrieval-Augmented Generation) pour discuter littéralement avec ses propres données TikTok.*
+## 🚀 Phase 3 : Intelligence Connectée (Moyen terme) - [En Cours]
+*Ici on intègre le RAG (Retrieval-Augmented Generation) et la visualisation structurelle complexe.*
 
-- [x] **Recherche Vectorielle (Vector Search)** : Utiliser `pgvector` dans Supabase pour encoder les résumés sous forme d'embeddings. 
-- [x] **Mode "Chat UI"** : Interface façon ChatGPT où l'on pourrait demander : *"Quels étaient les 3 outils d'IA pour générer de la musique dont j'ai sauvegardé les vidéos la semaine dernière ?"*.
-- [x] **Extraction Structurée Automatique** : Lors de l'analyse IA, forcer la détection d'entités spécifiques :
-  - Outils mentionnés (avec génération des liens potentiels)
-  - Livres recommandés
-  - Actions (To-Do list extraite de la vidéo)
-- [x] **Exports Intégrés** : Bouton d'export en 1 clic vers Notion, Obsidian (Markdown format) ou Roam Research.
+- [x] **Recherche Vectorielle (Vector Search)** : Utilisation de `pgvector` et Embeddings IA.
+- [x] **Mode "Chat RAG"** : Interface façon ChatGPT pour interroger sa propre base de connaissances.
+- [x] **Extraction Structurée** : Détection des Outils, Livres et Actions mentionnés.
+- [x] **Visualisation Graphe (Graph View)** : Affichage topologique animée des tags et des vidéos (façon réseau neuronal interactif).
+- [ ] **Agent Auto-Organisation** : Déduplication sémantique si deux vidéos partagent le même sujet.
 
 ---
 
 ## 🌍 Phase 4 : Écosystème & Accessibilité (Long terme)
-*Rendre l'outil omniprésent et sans friction lors de la consultation.*
+*Rendre l'outil omniprésent, mobile et hautement connecté.*
 
-- **Extension Navigateur (Chrome/Firefox)** : Un bouton "Sauvegarder dans mon Second Brain" rajouté directement sur l'interface Tiktok.com/Instagram.
-- **Support Multiformat** : S'étendre aux Instagram Reels et YouTube Shorts.
-- **PWA (Progressive Web App)** : Transformer l'interface Web en application mobile pour qu'on puisse "Partager vers..." depuis l'application mobile native de TikTok, et que la transaction se lance en arrière-plan.
+- [ ] **Synchronisation Automatique Notion/Obsidian** : Connecter l'API pour que chaque nouveau résumé soit injecté en direct dans le Workspace de l'utilisateur.
+- [ ] **Extension Navigateur (Chrome/Firefox/Safari)** : Un bouton "Sauvegarder dans mon Second Brain" rajouté directement sur l'interface Tiktok.com, X.com ou Instagram.
+- [ ] **Transcription Audio Locale** : Utiliser `Whisper` local via WebAssembly pour éviter du transit vers les LLMs si désiré, avant la phase de résumé.
+- [ ] **Support Multi-Réseaux** : S'étendre aux Instagram Reels, YouTube Shorts et Tweets vidéos.
+- [ ] **Synthèse Vocale des Résumés** : Écouter ses propres résumés ou To-Do list générés pendant un trajet (Text-to-Speech ElevenLabs ou Google Cloud).
+- [ ] **Interface Progressive Web App (PWA)** : Pouvoir "Partager vers..." depuis l'application mobile native avec exécution en arrière-plan et notifications Push de succès.
