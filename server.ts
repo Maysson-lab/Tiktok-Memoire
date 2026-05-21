@@ -178,8 +178,9 @@ Retourne seulement le JSON sans blocs de code markdown.`;
       try {
         console.log(`[3.8/4] Generating vector embedding...`);
         const embedRes = await ai.models.embedContent({
-          model: 'text-embedding-004',
-          contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`
+          model: 'gemini-embedding-2',
+          contents: `Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`,
+          config: { outputDimensionality: 768 }
         });
         embeddingVector = embedRes.embeddings?.[0]?.values || null;
       } catch (embErr) {
@@ -281,8 +282,9 @@ Retourne seulement le JSON sans blocs de code markdown.`;
       if (supabase) {
          // Generate embedding for user query
          const embedRes = await ai.models.embedContent({
-            model: 'text-embedding-004',
-            contents: query
+            model: 'gemini-embedding-2',
+            contents: query,
+            config: { outputDimensionality: 768 }
          });
          const queryEmbedding = embedRes.embeddings?.[0]?.values;
 
