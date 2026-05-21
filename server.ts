@@ -207,7 +207,7 @@ Retourne seulement le JSON sans blocs de code markdown.`;
         // Try to insert with new columns
         const { error, data: insertedData } = await supabase.from('tiktok_summaries').insert([entry]).select().single();
         if (error) {
-           if (error.code === '42703' || error.message.includes('embedding')) { // Column does not exist
+           if (error.code === '42703' || error.message?.includes('embedding') || error.message?.includes('schema cache') || error.message?.includes('Could not find the')) { // Column does not exist
              console.warn("New Phase 3 columns not found, using legacy schema.");
              const fallbackEntry = { ...entry };
              delete fallbackEntry.tags;
