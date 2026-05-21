@@ -236,6 +236,28 @@ Retourne seulement le JSON sans blocs de code markdown.`;
       console.log(`[3.8/4] Generating vector embedding...`);
       let embeddingVector = await getEmbedding(`Title: ${videoData.title || ''}\nTranscription: ${finalTranscription}\nSummary: ${finalSummary}`);
 
+      if (supabase && embeddingVector) {
+        console.log(`[3.9/4] Checking for semantic duplicates...`);
+        const { data: matches, error } = await supabase.rpc('match_videos', {
+           query_embedding: embeddingVector,
+           match_threshold: 0.90, // 90% threshold for deduplication
+           match_count: 1
+        });
+        if (!error && matches && matches.length > 0) {
+           console.log(`Found a highly similar video: ${matches[0].title} (Similarity: ${matches[0].similarity})`);
+           const { data: existingData } = await supabase.from('tiktok_summaries').select('*').eq('id', matches[0].id).single();
+           if (existingData) {
+              try { fs.unlinkSync(filePath); } catch (e) {}
+              return res.json({ 
+                  success: true, 
+                  data: existingData, 
+                  duplicate: true, 
+                  message: `Vidéo déjà existante ou sujet identique (Similitude: ${Math.round(matches[0].similarity * 100)}%)`
+              });
+           }
+        }
+      }
+
       let entry: any = {
         tiktok_url: bucketUrl || url || "local_upload",
         video_id: videoId,

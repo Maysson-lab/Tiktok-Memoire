@@ -32,6 +32,7 @@ export default function App() {
 
   const [status, setStatus] = useState<SummaryStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [warningMsg, setWarningMsg] = useState('');
   const [data, setData] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<SummaryData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,6 +152,7 @@ export default function App() {
 
     setStatus('fetching');
     setErrorMsg('');
+    setWarningMsg('');
     setData(null);
 
     try {
@@ -173,7 +175,12 @@ export default function App() {
       }
 
       setData(result.data);
-      setHistory((prev) => [result.data, ...prev]);
+      if (result.duplicate) {
+         setWarningMsg(result.message || 'Contenu similaire détecté.');
+         setHistory((prev) => !prev.find(i => i.id === result.data.id) ? [result.data, ...prev] : prev);
+      } else {
+         setHistory((prev) => [result.data, ...prev]);
+      }
       setStatus('success');
       if (inputMode === 'url') setUrl('');
       else setFile(null);
@@ -232,9 +239,9 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto w-full flex-grow flex flex-col">
         {viewMode === 'history' ? (
-          <HistoryView history={history} onSelect={(item) => { setData(item); setStatus('success'); setViewMode('capture'); }} />
+          <HistoryView history={history} onSelect={(item) => { setData(item); setWarningMsg(''); setStatus('success'); setViewMode('capture'); }} />
         ) : viewMode === 'graph' ? (
-          <GraphView history={history} onSelect={(item) => { setData(item); setStatus('success'); setViewMode('capture'); }} />
+          <GraphView history={history} onSelect={(item) => { setData(item); setWarningMsg(''); setStatus('success'); setViewMode('capture'); }} />
         ) : viewMode === 'chat' ? (
           <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden p-4 relative">
             <div className="flex-grow overflow-y-auto custom-scrollbar p-4 space-y-6">
@@ -349,6 +356,13 @@ export default function App() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 mb-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-200">
             <AlertCircle className="w-5 h-5 text-red-400" />
             <p className="text-sm font-medium">{errorMsg}</p>
+          </motion.div>
+        )}
+
+        {warningMsg && status === 'success' && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 mb-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-center gap-3 text-orange-200">
+            <AlertCircle className="w-5 h-5 text-orange-400" />
+            <p className="text-sm font-medium">{warningMsg}</p>
           </motion.div>
         )}
 
@@ -525,7 +539,7 @@ export default function App() {
                  <p className="text-xs text-slate-500 text-center py-4">Aucune vidéo correspondante.</p>
                ) : (
                  filteredHistory.map((item, idx) => (
-                   <div key={idx} className="group p-3 bg-slate-900 border border-slate-800 rounded-xl flex gap-3 hover:border-slate-700 transition-colors cursor-pointer" onClick={() => { setData(item); setStatus('success'); }}>
+                   <div key={idx} className="group p-3 bg-slate-900 border border-slate-800 rounded-xl flex gap-3 hover:border-slate-700 transition-colors cursor-pointer" onClick={() => { setData(item); setWarningMsg(''); setStatus('success'); }}>
                       <div className="w-12 h-12 rounded-lg bg-slate-800 shrink-0 flex items-center justify-center group-hover:bg-[#fe2c55]/10 transition-colors relative">
                         {item.is_favorite && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 absolute -top-1 -right-1 drop-shadow-md" />}
                         <Video className="w-4 h-4 text-slate-500 group-hover:text-[#fe2c55]" />
