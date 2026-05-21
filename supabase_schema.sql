@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SCRIPT DE CONFIGURATION SUPABASE COMPLET (Phases 1, 2 et 3)
+-- SCRIPT DE CONFIGURATION SUPABASE COMPLET (Phases 1, 2, 3 et 4)
 -- Copiez et collez entièrement ce script dans l'Éditeur SQL de Supabase.
 -- ==============================================================================
 
@@ -25,10 +25,10 @@ create table if not exists public.tiktok_summaries (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 3. Désactiver le Row Level Security (RLS) pour éviter les erreurs "violation de RLS"
+-- 3. Désactiver le Row Level Security (RLS) sur la table pour éviter les erreurs "violation de RLS"
 alter table public.tiktok_summaries disable row level security;
 
--- (Optionnel) Si vous voulez le purger plus tard et activer un accès public (non recommandé en prod, mais pour du dev rapide)
+-- (Optionnel) Politiques si vous activez le RLS plus tard
 -- create policy "Allow public insert" on public.tiktok_summaries for insert with check (true);
 -- create policy "Allow public select" on public.tiktok_summaries for select using (true);
 -- create policy "Allow public update" on public.tiktok_summaries for update using (true);
@@ -60,6 +60,29 @@ as $$
   limit match_count;
 $$;
 
+-- 5. Créer le bucket de stockage "videos" pour les vidéos MP4 téléchargées
+insert into storage.buckets (id, name, public) 
+values ('videos', 'videos', true)
+on conflict (id) do update set public = true;
+
+-- 6. Configurer les politiques d'accès (RLS) pour le bucket "videos"
+-- Permettre à tout le monde de lire les vidéos
+create policy "Allow public read access" 
+on storage.objects for select 
+using (bucket_id = 'videos');
+
+-- Permettre à tout le monde d'ajouter des vidéos
+create policy "Allow public insert access" 
+on storage.objects for insert 
+with check (bucket_id = 'videos');
+
+-- Permettre à tout le monde de mettre à jour des vidéos
+create policy "Allow public update access" 
+on storage.objects for update 
+using (bucket_id = 'videos');
+
+-- ==============================================================================
 -- IMPORTANT :
+-- ==============================================================================
 -- Après avoir exécuté ce script, n'oubliez pas d'aller dans "Project Settings" -> "API"
 -- de Supabase pour vérifier que votre URL et votre `anon key` sont correctes dans l'application.
