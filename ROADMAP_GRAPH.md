@@ -7,12 +7,12 @@ Faire en sorte que le graphe ne soit pas une simple visualisation statique, mais
 
 ---
 
-## 🛠️ Phase 1 : Interactions et UX (Court Terme)
+## 🛠️ Phase 1 : Interactions et UX (Court Terme) - [Terminé]
 
-- [ ] **Mise en valeur au survol (Hover Effect)** : Mettre en surbrillance le nœud survolé et ses connexions directes (diminuer l'opacité du reste du graphe).
-- [ ] **Tooltips intelligents** : Afficher un aperçu rapide (titre, résumé court, miniatures) lorsqu'on survole le nœud d'une vidéo.
-- [ ] **Filtres interactifs** : Ajouter des boutons cliquables dans la légende permettant de masquer/afficher spécifiquement certaines catégories (ex: cacher les tags, ne garder que les Outils et Livres).
-- [ ] **Zoom et centrage automatiques** : Double-cliquer sur un nœud (tag ou vidéo) pour recentrer la caméra dessus ou l'isoler.
+- [x] **Mise en valeur au survol (Hover Effect)** : Mettre en surbrillance le nœud survolé et ses connexions directes (diminuer l'opacité du reste du graphe).
+- [x] **Tooltips intelligents** : Afficher un aperçu rapide (titre, résumé court, miniatures) lorsqu'on survole le nœud d'une vidéo.
+- [x] **Filtres interactifs** : Ajouter des boutons cliquables dans la légende permettant de masquer/afficher spécifiquement certaines catégories (ex: cacher les tags, ne garder que les Outils et Livres).
+- [x] **Zoom et centrage automatiques** : Double-cliquer sur un nœud (tag ou vidéo) pour recentrer la caméra dessus ou l'isoler.
 
 ---
 
